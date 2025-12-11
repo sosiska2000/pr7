@@ -13,6 +13,8 @@ namespace HttpNewsPAT
     {
         static void Main(string[] args)
         {
+            Cookie token = SingIn("user", "user");
+            GetContent(token);
             //WebRequest Request = WebRequest.Create("http://news.permaviat.ru/main");
             //using (HttpWebResponse Response = (HttpWebResponse)Request.GetResponse())
             //{
@@ -28,11 +30,31 @@ namespace HttpNewsPAT
             //    }
             //}
             //Console.Read();
-            SingIn("user", "user");
+
             Console.Read();
         }
-        public static void SingIn(string login, string password)
+        public static string GetContent(Cookie token)
         {
+            string Content = null;
+            string Url = "http://news.permaviat.ru/main";
+            Debug.WriteLine($"Выполняем запрос: {Url}");
+
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(Url);
+            request.CookieContainer = new CookieContainer();
+            request.CookieContainer.Add(token);
+
+            using (HttpWebResponse Response = (HttpWebResponse)request.GetResponse())
+            {
+                Debug.WriteLine($"Статус выполнения: {Response.StatusCode}");
+
+                Content = new StreamReader(Response.GetResponseStream()).ReadToEnd();
+            }
+             return Content;
+        }
+        public static Cookie SingIn(string login, string password)
+        {
+            Cookie token = null;
+
             string Url = "http://news.permaviat.ru/ajax/login.php";
 
             Debug.WriteLine($"Выполняем запрос: {Url}");
@@ -51,7 +73,10 @@ namespace HttpNewsPAT
             {
                 string ResponseFromServer= new StreamReader(Response.GetResponseStream()).ReadToEnd();
                 Console.WriteLine(ResponseFromServer);
+
+                token = Response.Cookies["token"];
             }
+            return token;
         }
     }
 }

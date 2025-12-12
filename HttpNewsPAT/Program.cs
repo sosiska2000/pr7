@@ -1,133 +1,105 @@
-﻿using System;
+﻿using HtmlAgilityPack;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
-using HtmlAgilityPack;
 
-namespace HttpNewsPAT
+namespace HttpClientNa5
 {
-    public class NewsItem
-    {
-        public string Src { get; set; }
-        public string Name { get; set; }
-        public string Description { get; set; }
-    }
-
     internal class Program
     {
-        private static readonly string LogFilePath = "debug.log";
+        private static readonly HttpClient _httpClient = new HttpClient();
 
         static async Task Main(string[] args)
         {
-            Console.WriteLine("1. Получить новости с сайта");
-            Console.WriteLine("2. Добавить новость на сайт");
-            Console.Write("Выберите действие (1 или 2): ");
+            Console.WriteLine("салам алейкум,че хочешь?");
+            Console.ReadLine();
 
-            string choice = Console.ReadLine();
+            while (true)
+            {
+                Console.WriteLine("\nВыбери:");
+                Console.WriteLine("1. че написал андрюха и артем(чек)");
+                Console.WriteLine("2. добавить dog");
+                Console.Write("Твой выбор: ");
 
-            if (choice == "1")
-            {
-                await GetNewsFromSite();
-            }
-            else if (choice == "2")
-            {
-                await AddNewsToSite();
-            }
-            else
-            {
-                Console.WriteLine("Неверный выбор!");
-            }
+                string choice = Console.ReadLine();
 
-            Console.WriteLine("\nНажмите любую клавишу для выхода...");
-            Console.ReadKey();
+                if (choice == "1")
+                {
+                    Console.WriteLine("\nче написал андрюха и артем");
+                    Cookie token = await SingInAsync("user", "user");
+
+                    if (token != null)
+                    {
+                        string content = await GetContentAsync(token);
+                        var newsList = ParsingHtml(content);
+
+                        if (newsList.Count == 0)
+                        {
+                            Console.WriteLine("Пока ничего не написали...");
+                        }
+                        else
+                        {
+                            foreach (var news in newsList)
+                            {
+                                Console.WriteLine($"\n{news.Name}");
+                                if (!string.IsNullOrEmpty(news.Description))
+                                {
+                                    Console.WriteLine($"{news.Description}");
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (choice == "2")
+                {
+                    Console.WriteLine("\nдобавляем dog");
+                    Cookie token = await SingInAsync("user", "user");
+
+                    if (token != null)
+                    {
+                        Console.WriteLine("\nдай ссылку на картинку (яндекс картинки (копировать ссылку на изображение))");
+                        string src = Console.ReadLine();
+
+                        Console.Write("как назовем новость: ");
+                        string name = Console.ReadLine();
+
+                        Console.Write("описание: ");
+                        string description = Console.ReadLine();
+
+                        bool result = await AddNewsToDatabaseAsync(new NewsItem
+                        {
+                            Src = src,
+                            Name = name,
+                            Description = description
+                        }, token);
+
+                        if (result)
+                        {
+                            Console.WriteLine("\ndog добавлен!");
+                        }
+                        else
+                        {
+                            Console.WriteLine("\nчто-то пошло не так...");
+                        }
+                    }
+                }
+            }
         }
 
-        static async Task GetNewsFromSite()
+        public class NewsItem
         {
-            Console.WriteLine("\nПолучение новостей");
-
-            try
-            {
-                // Авторизация
-                Cookie token = await SingInAsync("admin", "admin");
-                if (token == null)
-                {
-                    Console.WriteLine("Ошибка авторизации!");
-                    return;
-                }
-                Console.WriteLine("Авторизация успешна!");
-
-                // Получение контента
-                string content = await GetContentAsync(token);
-                if (string.IsNullOrEmpty(content))
-                {
-                    Console.WriteLine("Не удалось получить контент!");
-                    return;
-                }
-                Console.WriteLine("Контент успешно получен!");
-
-                // Парсинг HTML
-                var newsList = ParsingHtml(content);
-                Console.WriteLine($"\nНайдено новостей: {newsList.Count}");
-
-                foreach (var news in newsList)
-                {
-                    Console.WriteLine($"\nНазвание: {news.Name}");
-                    Console.WriteLine($"Изображение: {news.Src}");
-                    Console.WriteLine($"Описание: {news.Description}");
-                    Console.WriteLine(new string('-', 50));
-                }
-
-                // Предложение добавить новость
-                Console.Write("\nХотите добавить новость? (y/n): ");
-                if (Console.ReadLine().ToLower() == "y")
-                {
-                    await AddNewsManuallyAsync(token);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка: {ex.Message}");
-                LogToFile($"Ошибка в GetNewsFromSite: {ex.Message}");
-            }
-        }
-
-        static async Task AddNewsToSite()
-        {
-            Console.WriteLine("\nДобавление новости");
-
-            try
-            {
-                // Авторизация
-                Cookie token = await SingInAsync("admin", "admin");
-                if (token == null)
-                {
-                    Console.WriteLine("Ошибка авторизации!");
-                    return;
-                }
-                Console.WriteLine("Авторизация успешна!");
-
-                // Добавление новости
-                await AddNewsManuallyAsync(token);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка: {ex.Message}");
-                LogToFile($"Ошибка в AddNewsToSite: {ex.Message}");
-            }
+            public string Src { get; set; }
+            public string Name { get; set; }
+            public string Description { get; set; }
         }
 
         public static async Task<Cookie> SingInAsync(string login, string password)
         {
             string url = "http://10.111.20.114/ajax/login.php";
-            string message = $"Выполняем запрос авторизации: {url}";
-            Debug.WriteLine(message);
-            LogToFile(message);
 
             try
             {
@@ -148,54 +120,31 @@ namespace HttpNewsPAT
 
                     var response = await client.PostAsync(url, postData);
 
-                    message = $"Статус авторизации: {response.StatusCode}";
-                    Debug.WriteLine(message);
-                    LogToFile(message);
-
-                    var responseFromServer = await response.Content.ReadAsStringAsync();
-                    Debug.WriteLine($"Ответ сервера: {responseFromServer}");
-                    LogToFile($"Ответ сервера: {responseFromServer}");
-
-                    var cookies = cookieContainer.GetCookies(new Uri(url));
-                    var token = cookies["token"];
-
-                    if (token != null)
+                    if (response.IsSuccessStatusCode)
                     {
-                        return new Cookie(token.Name, token.Value, token.Path, token.Domain);
+                        var cookies = cookieContainer.GetCookies(new Uri(url));
+                        var token = cookies["token"];
+
+                        if (token != null)
+                        {
+                            return new Cookie(token.Name, token.Value, token.Path, token.Domain);
+                        }
                     }
 
-                    Console.WriteLine("Токен не найден в ответе!");
+                    Console.WriteLine("не зашел...");
                     return null;
                 }
             }
-            catch (HttpRequestException ex)
-            {
-                message = $"Ошибка HTTP запроса при авторизации: {ex.Message}";
-                Console.WriteLine(message);
-                LogToFile(message);
-                return null;
-            }
             catch (Exception ex)
             {
-                message = $"Ошибка авторизации: {ex.Message}";
-                Console.WriteLine(message);
-                LogToFile(message);
+                Console.WriteLine($"ошибка: {ex.Message}");
                 return null;
             }
         }
 
         public static async Task<string> GetContentAsync(Cookie token)
         {
-            if (token == null)
-            {
-                Console.WriteLine("Токен не получен!");
-                return null;
-            }
-
-            string url = "http://10.111.20.114/main";
-            string message = $"Выполняем запрос контента: {url}";
-            Debug.WriteLine(message);
-            LogToFile(message);
+            string url = "http://10.111.20.114/main.php";
 
             try
             {
@@ -205,39 +154,18 @@ namespace HttpNewsPAT
                     CookieContainer = cookieContainer,
                     UseCookies = true
                 };
-
-                cookieContainer.Add(new Uri(url),
-                    new Cookie(token.Name, token.Value, token.Path, token.Domain));
+                cookieContainer.Add(new Uri(url), new System.Net.Cookie(token.Name, token.Value, token.Path, token.Domain));
 
                 using (var client = new HttpClient(handler))
                 {
                     var response = await client.GetAsync(url);
-
-                    message = $"Статус получения контента: {response.StatusCode}";
-                    Debug.WriteLine(message);
-                    LogToFile(message);
-
                     response.EnsureSuccessStatusCode();
-                    var content = await response.Content.ReadAsStringAsync();
-
-                    Debug.WriteLine($"Получено символов: {content.Length}");
-                    LogToFile($"Получено символов: {content.Length}");
-
-                    return content;
+                    return await response.Content.ReadAsStringAsync();
                 }
-            }
-            catch (HttpRequestException ex)
-            {
-                message = $"Ошибка HTTP запроса при получении контента: {ex.Message}";
-                Console.WriteLine(message);
-                LogToFile(message);
-                return null;
             }
             catch (Exception ex)
             {
-                message = $"Ошибка получения контента: {ex.Message}";
-                Console.WriteLine(message);
-                LogToFile(message);
+                Console.WriteLine($"ошибка: {ex.Message}");
                 return null;
             }
         }
@@ -248,7 +176,6 @@ namespace HttpNewsPAT
 
             if (string.IsNullOrEmpty(htmlCode))
             {
-                Console.WriteLine("HTML код пуст!");
                 return newsList;
             }
 
@@ -263,8 +190,8 @@ namespace HttpNewsPAT
                 foreach (HtmlNode DivNews in DivsNews)
                 {
                     var src = DivNews.ChildNodes[1].GetAttributeValue("src", "none");
-                    var name = DivNews.ChildNodes[3].InnerHtml;
-                    var description = DivNews.ChildNodes[5].InnerHtml;
+                    var name = DivNews.ChildNodes[3].InnerText.Trim();
+                    var description = DivNews.ChildNodes[5].InnerText.Trim();
 
                     newsList.Add(new NewsItem
                     {
@@ -273,76 +200,20 @@ namespace HttpNewsPAT
                         Description = description
                     });
                 }
-
-                Debug.WriteLine($"Найдено элементов с классом 'news': {newsList.Count}");
-                LogToFile($"Найдено элементов с классом 'news': {newsList.Count}");
             }
             catch (Exception ex)
             {
-                string message = $"Ошибка парсинга HTML: {ex.Message}";
-                Console.WriteLine(message);
-                Debug.WriteLine(message);
-                LogToFile(message);
+                Console.WriteLine($"ошибка парсинга: {ex.Message}");
             }
 
             return newsList;
-        }
-
-        public static async Task AddNewsManuallyAsync(Cookie token)
-        {
-            if (token == null)
-            {
-                Console.WriteLine("Ошибка: Токен не получен. Авторизуйтесь снова.");
-                return;
-            }
-
-            Console.WriteLine("\nДобавление новой новости");
-            Console.Write("Введите URL изображения: ");
-            string src = Console.ReadLine();
-
-            Console.Write("Введите название новости: ");
-            string name = Console.ReadLine();
-
-            Console.Write("Введите описание новости: ");
-            string description = Console.ReadLine();
-
-            Console.WriteLine("\nПроверьте введенные данные");
-            Console.WriteLine($"Изображение: {src}");
-            Console.WriteLine($"Название: {name}");
-            Console.WriteLine($"Описание: {description}");
-            Console.Write("\nДобавить эту новость? (y/n): ");
-
-            if (Console.ReadLine().ToLower() != "y")
-            {
-                Console.WriteLine("Добавление отменено.");
-                return;
-            }
-
-            bool result = await AddNewsToDatabaseAsync(new NewsItem
-            {
-                Src = src,
-                Name = name,
-                Description = description
-            }, token);
-
-            if (result)
-            {
-                Console.WriteLine($"\nНовость '{name}' успешно добавлена!");
-            }
-            else
-            {
-                Console.WriteLine($"\nОшибка при добавлении новости '{name}'");
-            }
         }
 
         public static async Task<bool> AddNewsToDatabaseAsync(NewsItem news, Cookie token)
         {
             try
             {
-                string url = "http://10.111.20.114/add";
-                string message = $"Добавляем новость: {news.Name}";
-                Debug.WriteLine(message);
-                LogToFile(message);
+                string url = "http://10.111.20.114/ajax/add.php";
 
                 var cookieContainer = new CookieContainer();
                 var handler = new HttpClientHandler
@@ -350,9 +221,7 @@ namespace HttpNewsPAT
                     CookieContainer = cookieContainer,
                     UseCookies = true
                 };
-
-                cookieContainer.Add(new Uri(url),
-                    new Cookie(token.Name, token.Value, token.Path, token.Domain));
+                cookieContainer.Add(new Uri(url), new System.Net.Cookie(token.Name, token.Value, token.Path, token.Domain));
 
                 using (var client = new HttpClient(handler))
                 {
@@ -364,57 +233,13 @@ namespace HttpNewsPAT
                     });
 
                     var response = await client.PostAsync(url, postData);
-
-                    message = $"Статус добавления: {response.StatusCode}";
-                    Debug.WriteLine(message);
-                    LogToFile(message);
-
-                    string responseFromServer = await response.Content.ReadAsStringAsync();
-                    Debug.WriteLine($"Ответ сервера: {responseFromServer}");
-                    LogToFile($"Ответ сервера: {responseFromServer}");
-
-                    Console.WriteLine($"Сервер ответил: {responseFromServer}");
-
                     return response.StatusCode == HttpStatusCode.OK;
                 }
             }
-            catch (HttpRequestException ex)
-            {
-                string message = $"Ошибка HTTP запроса при добавлении новости: {ex.Message}";
-                Console.WriteLine(message);
-                Debug.WriteLine(message);
-                LogToFile(message);
-
-                if (ex.InnerException != null)
-                {
-                    message = $"Внутренняя ошибка: {ex.InnerException.Message}";
-                    Console.WriteLine(message);
-                    LogToFile(message);
-                }
-                return false;
-            }
             catch (Exception ex)
             {
-                string message = $"Ошибка при добавлении новости: {ex.Message}";
-                Console.WriteLine(message);
-                Debug.WriteLine(message);
-                LogToFile(message);
+                Console.WriteLine($"ошибка: {ex.Message}");
                 return false;
-            }
-        }
-
-        private static void LogToFile(string message)
-        {
-            try
-            {
-                using (StreamWriter sw = new StreamWriter(LogFilePath, true, Encoding.UTF8))
-                {
-                    sw.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Ошибка записи в лог-файл: {ex.Message}");
             }
         }
     }
